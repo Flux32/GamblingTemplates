@@ -7,6 +7,7 @@ using Spine;
 using Spine.Unity;
 using TMPro;
 using UnityEngine;
+using UnityEngine.Serialization;
 using AnimationState = Spine.AnimationState;
 
 namespace Modules.GamblingTemplates.GamblingTemplates.Runtime.Cashout
@@ -20,10 +21,13 @@ namespace Modules.GamblingTemplates.GamblingTemplates.Runtime.Cashout
 
         [Header("Animations")]
         [SerializeField, SpineAnimation] private string _openStartAnimationName;
-        [SerializeField, SpineAnimation] private string _openIndleAnimationName;
+        [SerializeField, SpineAnimation] private string _idleAnimationName;
         [SerializeField, SpineAnimation] private string _closeAnimationName;
+        
         [SerializeField] private float _openTimeScale = 2f;
         [SerializeField] private float _idleTimeScale = 2f;
+        [SerializeField] private float _closeTimeScale = 1f;
+        
         [SerializeField, Min(0f)] private float _openMixDuration = 0f;
         [SerializeField, Min(0f)] private float _idleMixDuration = 0f;
         [SerializeField, Min(0f)] private float _closeMixDuration = 0f;
@@ -102,7 +106,7 @@ namespace Modules.GamblingTemplates.GamblingTemplates.Runtime.Cashout
             openAnim.MixDuration = _openMixDuration;
             openAnim.TimeScale = _openTimeScale;
 
-            TrackEntry idleAnim = animationState.AddAnimation(0, _openIndleAnimationName, true, 0);
+            TrackEntry idleAnim = animationState.AddAnimation(0, _idleAnimationName, true, 0);
             idleAnim.MixDuration = _idleMixDuration;
             idleAnim.TimeScale = _idleTimeScale;
 
@@ -126,6 +130,7 @@ namespace Modules.GamblingTemplates.GamblingTemplates.Runtime.Cashout
 
             TrackEntry closeAnim = _skeletonAnimation.AnimationState.SetAnimation(0, _closeAnimationName, false);
             closeAnim.MixDuration = _closeMixDuration;
+            closeAnim.TimeScale = _closeTimeScale;
 
             ApplySkeletonPoseImmediately();
 
@@ -200,7 +205,7 @@ namespace Modules.GamblingTemplates.GamblingTemplates.Runtime.Cashout
             Skeleton skeleton = _skeletonAnimation.Skeleton;
             skeleton.SetToSetupPose();
             _skeletonAnimation.AnimationState.Apply(skeleton);
-            skeleton.UpdateWorldTransform();
+            skeleton.UpdateWorldTransform(Skeleton.Physics.Update);
             _skeletonAnimation.UpdateMesh();
         }
     }
