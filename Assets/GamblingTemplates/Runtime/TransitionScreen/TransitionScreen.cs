@@ -3,19 +3,22 @@ using Modules.Road;
 using Spine;
 using Spine.Unity;
 using UnityEngine;
+using AnimationState = Spine.AnimationState;
 
-namespace Modules.Pepe.Art.TransitionScreen
+namespace Modules.GamblingTemplates.GamblingTemplates.Runtime.TransitionScreen
 {
     public class TransitionScreen : MonoBehaviour
     {
         [SerializeField] private SkeletonGraphic _transitionScreen;
-        [SerializeField] private string _transitionAnimationName;
-        [SerializeField, Range(0f, 1f)] private float _needChangeSceneNormalizedTime = 0.5f;
 
-        private TrackEntry _activeTransitionTrack;
+        [SerializeField, SpineAnimation] private string _transitionStartAnimationName;
+        [SerializeField, SpineAnimation] private string _transitionIdleAnimationName;
+        [SerializeField, SpineAnimation] private string _transitionEndAnimationName;
+
+        private TrackEntry _idleTrack;
+        private TrackEntry _endTrack;
         private Action _onTransitionCompleted;
         private Action _onNeedChangeScene;
-        private Coroutine _needChangeSceneRoutine;
         private bool _isNeedChangeSceneInvoked;
         private bool _hasCachedUiState;
         private bool _cachedHideDesktopBetBar;
@@ -40,33 +43,34 @@ namespace Modules.Pepe.Art.TransitionScreen
             _transitionScreen.gameObject.SetActive(true);
             _onTransitionCompleted = onCompleted;
             _onNeedChangeScene = onNeedChangeScene;
-            _activeTransitionTrack = 
-                _transitionScreen.AnimationState.SetAnimation(0, _transitionAnimationName, false);
-            
-            _activeTransitionTrack.MixDuration = 0f;
-            
-            _activeTransitionTrack.Complete += HandleTransitionFinished;
-            _activeTransitionTrack.End += HandleTransitionFinished;
 
-            if (_onNeedChangeScene != null)
-                _needChangeSceneRoutine = StartCoroutine(WaitForNeedChangeSceneTime(_activeTransitionTrack));
+            AnimationState animationState = _transitionScreen.AnimationState;
+
+            TrackEntry startTrack = animationState.SetAnimation(0, _transitionStartAnimationName, false);
+            startTrack.MixDuration = 0f;
+
+            _idleTrack = animationState.AddAnimation(0, _transitionIdleAnimationName, false, 0f);
+            _idleTrack.MixDuration = 0f;
+            _idleTrack.Start += HandleIdleStarted;
+
+            _endTrack = animationState.AddAnimation(0, _transitionEndAnimationName, false, 0f);
+            _endTrack.MixDuration = 0f;
+            _endTrack.Complete += HandleTransitionFinished;
+            _endTrack.End += HandleTransitionFinished;
         }
 
-        private System.Collections.IEnumerator WaitForNeedChangeSceneTime(TrackEntry trackEntry)
+        private void HandleIdleStarted(TrackEntry trackEntry)
         {
-            float targetTrackTime = Mathf.Clamp01(_needChangeSceneNormalizedTime) * trackEntry.Animation.Duration;
-            while (ReferenceEquals(trackEntry, _activeTransitionTrack) && trackEntry.TrackTime < targetTrackTime)
-                yield return null;
+            if (!ReferenceEquals(trackEntry, _idleTrack))
+                return;
 
-            if (ReferenceEquals(trackEntry, _activeTransitionTrack))
-                InvokeNeedChangeScene();
-
-            _needChangeSceneRoutine = null;
+            _idleTrack.Start -= HandleIdleStarted;
+            InvokeNeedChangeScene();
         }
 
         private void HandleTransitionFinished(TrackEntry trackEntry)
         {
-            if (!ReferenceEquals(trackEntry, _activeTransitionTrack))
+            if (!ReferenceEquals(trackEntry, _endTrack))
                 return;
 
             CompleteTransition();
@@ -74,18 +78,7 @@ namespace Modules.Pepe.Art.TransitionScreen
 
         private void CompleteTransition()
         {
-            if (_activeTransitionTrack == null)
-                return;
-
-            _activeTransitionTrack.Complete -= HandleTransitionFinished;
-            _activeTransitionTrack.End -= HandleTransitionFinished;
-            _activeTransitionTrack = null;
-
-            if (_needChangeSceneRoutine != null)
-            {
-                StopCoroutine(_needChangeSceneRoutine);
-                _needChangeSceneRoutine = null;
-            }
+            ClearTrackHandlers();
 
             InvokeNeedChangeScene();
             _transitionScreen.gameObject.SetActive(false);
@@ -104,20 +97,25 @@ namespace Modules.Pepe.Art.TransitionScreen
             _onNeedChangeScene?.Invoke();
         }
 
-        private void ResetActiveTransitionState()
+        private void ClearTrackHandlers()
         {
-            if (_activeTransitionTrack != null)
+            if (_idleTrack != null)
             {
-                _activeTransitionTrack.Complete -= HandleTransitionFinished;
-                _activeTransitionTrack.End -= HandleTransitionFinished;
-                _activeTransitionTrack = null;
+                _idleTrack.Start -= HandleIdleStarted;
+                _idleTrack = null;
             }
 
-            if (_needChangeSceneRoutine != null)
+            if (_endTrack != null)
             {
-                StopCoroutine(_needChangeSceneRoutine);
-                _needChangeSceneRoutine = null;
+                _endTrack.Complete -= HandleTransitionFinished;
+                _endTrack.End -= HandleTransitionFinished;
+                _endTrack = null;
             }
+        }
+
+        private void ResetActiveTransitionState()
+        {
+            ClearTrackHandlers();
 
             _isNeedChangeSceneInvoked = false;
             _onTransitionCompleted = null;
