@@ -165,6 +165,8 @@ namespace Modules.GamblingTemplates.GamblingTemplates.Runtime.RecievedFreeGames
             _skeletonGraphic.AnimationState.ClearTracks();
 
             TrackEntry entry = _skeletonGraphic.AnimationState.SetAnimation(0, _startAnim, false);
+            
+            Debug.Log($"{nameof(RecievedFreeGames)} show start anim");
             if (entry == null)
                 return;
 
@@ -367,6 +369,8 @@ namespace Modules.GamblingTemplates.GamblingTemplates.Runtime.RecievedFreeGames
             else
             {
                 startEntry = _skeletonGraphic.AnimationState.SetAnimation(0, _startAnim, false);
+                Debug.Log($"{nameof(RecievedFreeGames)} show start anim");
+
                 if (startEntry != null)
                     startEntry.MixDuration = 0f;
                 _startTrackEntry = startEntry;
@@ -375,6 +379,9 @@ namespace Modules.GamblingTemplates.GamblingTemplates.Runtime.RecievedFreeGames
             if (!string.IsNullOrEmpty(_idleAnim))
             {
                 TrackEntry idleEntry = _skeletonGraphic.AnimationState.AddAnimation(0, _idleAnim, true, 0f);
+                
+                Debug.Log($"{nameof(RecievedFreeGames)} show end anim");
+
                 if (idleEntry != null)
                     idleEntry.MixDuration = 1f;
             }
@@ -403,6 +410,8 @@ namespace Modules.GamblingTemplates.GamblingTemplates.Runtime.RecievedFreeGames
                 return;
 
             TrackEntry endEntry = _skeletonGraphic.AnimationState.SetAnimation(0, _endAnim, false);
+            Debug.Log($"{nameof(RecievedFreeGames)} show end anim");
+
             if (endEntry != null)
                 endEntry.MixDuration = 1f;
         }
