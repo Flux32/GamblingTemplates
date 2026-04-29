@@ -1,0 +1,3 @@
+<linker>
+    <assembly fullname="GamblingTemplates.Runtime" preserve="all" />
+</linker>

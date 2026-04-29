@@ -1,0 +1,17 @@
+{
+  "name": "com.pixi.gamblingtemplates",
+  "version": "1.0.0",
+  "displayName": "GamblingTemplates",
+  "description": "GamblingTemplates package.",
+  "unity": "6000.0",
+  "dependencies": {
+    "com.unity.nuget.newtonsoft-json": "3.2.1"
+  },
+  "keywords": [
+    "gambling",
+    "templates"
+  ],
+  "author": {
+    "name": "Pixi"
+  }
+}

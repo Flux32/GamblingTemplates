@@ -1,0 +1,21 @@
+{
+    "name": "GamblingTemplates.Runtime",
+    "rootNamespace": "Modules.GamblingTemplates",
+    "references": [
+        "WebBridge.Runtime",
+        "Unity.TextMeshPro",
+        "spine-unity",
+        "spine-csharp"
+    ],
+    "includePlatforms": [],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": true,
+    "precompiledReferences": [
+        "Newtonsoft.Json.dll"
+    ],
+    "autoReferenced": true,
+    "defineConstraints": [],
+    "versionDefines": [],
+    "noEngineReferences": false
+}
