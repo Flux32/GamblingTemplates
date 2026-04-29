@@ -23,7 +23,6 @@ namespace Modules.Pepe
         [SerializeField] private TMP_Text _winValue;
         [SerializeField] private TMP_Text _coefficientLabel;
         [SerializeField] private SkeletonGraphic _skeletonGraphic;
-        [SerializeField] private MegaWinCoinsBurstEffect _coinsBurstEffect;
 
         [SerializeField] private TMP_Text _pressAnywhereToContinueLabel;
         [SerializeField, Range(0f, 1f)] private float _fadeOutPressAnywhereMinAlpha = 0.7f;
@@ -100,7 +99,6 @@ namespace Modules.Pepe
             StopHideRoutine();
             StopCanvasFadeRoutine();
             StopPressAnywherePulse();
-            _coinsBurstEffect.StopAndReset();
             UnsubscribeOpenTrackEntry();
             UnsubscribeOutTrackEntry();
             _isWaitingForCloseClick = false;
@@ -126,7 +124,6 @@ namespace Modules.Pepe
             SetCanvasAlpha(0f);
             _pressAnywhereAnimation?.PrepareForShow();
             StartCanvasFade(0f, 1f, _canvasFadeInDuration, _canvasFadeInDelay);
-            _coinsBurstEffect.Play();
 
             TrackEntry openAnim = null;
             if (_skeletonGraphic != null && _skeletonGraphic.AnimationState != null)
@@ -511,7 +508,6 @@ namespace Modules.Pepe
             StopValueStartRoutine();
             StopMergeAnimation();
             UnsubscribeOpenTrackEntry();
-            _coinsBurstEffect.StopWithGravityDrop(_coinDropGravityMultiplier);
 
             if (!gameObject.activeSelf)
             {
