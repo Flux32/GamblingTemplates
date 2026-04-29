@@ -19,6 +19,9 @@ namespace Modules.GamblingTemplates.GamblingTemplates.Runtime.RecievedFreeGames
         [SerializeField, SpineAnimation] private string _startAnim;
         [SerializeField, SpineAnimation] private string _idleAnim;
         [SerializeField, SpineAnimation] private string _endAnim;
+        [SerializeField, Min(0f)] private float _startMixDuration = 0f;
+        [SerializeField, Min(0f)] private float _idleMixDuration = 0f;
+        [SerializeField, Min(0f)] private float _endMixDuration = 0f;
 
         [Header("Press Anywhere")]
         [SerializeField, Range(0f, 1f)] private float _fadeOutPressAnywhereMinAlpha = 0.7f;
@@ -132,16 +135,16 @@ namespace Modules.GamblingTemplates.GamblingTemplates.Runtime.RecievedFreeGames
             animationState.ClearTracks();
 
             TrackEntry start = animationState.SetAnimation(0, _startAnim, false);
-            start.MixDuration = 0f;
+            start.MixDuration = _startMixDuration;
 
             TrackEntry idle = animationState.AddAnimation(0, _idleAnim, true, 0f);
-            idle.MixDuration = 0f;
+            idle.MixDuration = _idleMixDuration;
         }
 
         private void PlayEnd()
         {
             TrackEntry end = _skeletonGraphic.AnimationState.SetAnimation(0, _endAnim, false);
-            end.MixDuration = 0f;
+            end.MixDuration = _endMixDuration;
         }
 
         private int ResolveFreeGamesAmount()
