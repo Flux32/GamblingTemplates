@@ -15,9 +15,7 @@ namespace Modules.Road
 
         [SerializeField] private SkeletonGraphic _skeletonGraphic;
 
-        [SerializeField] private TMP_Text _youHaveWonLabel;
         [SerializeField] private TMP_Text _freeGamesAmountLabel;
-        [SerializeField] private TMP_Text _freeGamesLabel;
         [SerializeField] private TMP_Text _pressAnywhereToContinueLabel;
         
         [SerializeField, Range(0f, 1f)] private float _fadeOutPressAnywhereMinAlpha = 0.7f;
@@ -34,7 +32,6 @@ namespace Modules.Road
         [SerializeField, Range(0f, 1f)] private float _descentTrigger = 0.5f;
         [SerializeField, Min(0f)] private float _youHaveWonLabelFadeDelay = 0f;
         [SerializeField, Min(0f)] private float _freeGamesAmountLabelFadeDelay = 0f;
-        [SerializeField, Min(0f)] private float _freeGamesLabelFadeDelay = 0f;
         
         [SerializeField, SpineAnimation] private string _startAnim;
         [SerializeField, SpineAnimation] private string _idleAnim;
@@ -112,24 +109,18 @@ namespace Modules.Road
         {
             _ = duration;
             SetCanvasAlpha(0f);
-            SetLabelAlpha(_youHaveWonLabel, 0f);
             SetLabelAlpha(_freeGamesAmountLabel, 0f);
-            SetLabelAlpha(_freeGamesLabel, 0f);
             _pressAnywhereAnimation?.PrepareForShow();
             PrepareTotemForShow();
             StartCanvasFade(0f, 1f, _canvasFadeInDuration, _canvasFadeInDelay);
 
             if (_youHaveWonLabelFadeDelay > 0f)
                 yield return new WaitForSeconds(_youHaveWonLabelFadeDelay);
-            StartLabelFade(_youHaveWonLabel, ref _youHaveWonFadeRoutine);
 
             yield return PlayTotemUntilDescent();
 
             StartLabelFade(_freeGamesAmountLabel, ref _freeGamesAmountFadeRoutine);
-
-            if (_freeGamesLabelFadeDelay > 0f)
-                yield return new WaitForSeconds(_freeGamesLabelFadeDelay);
-            StartLabelFade(_freeGamesLabel, ref _freeGamesFadeRoutine);
+            
             StartPressAnywherePulse();
             _isWaitingForCloseClick = true;
 
