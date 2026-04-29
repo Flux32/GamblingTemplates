@@ -1,7 +1,7 @@
-using System;
 using System.Collections;
 using System.Globalization;
 using System.Text.RegularExpressions;
+using Attributes.Source.Infrastructure.Inspector;
 using Modules.Road;
 using Spine;
 using Spine.Unity;
@@ -17,26 +17,24 @@ namespace Modules.GamblingTemplates.GamblingTemplates.Runtime.Cashout
         [SerializeField] private CanvasGroup _canvasGroup;
         [SerializeField] private SkeletonGraphic _skeletonAnimation;
         [SerializeField] private TMP_Text _cashoutValue;
-        
+
         [Header("Animations")]
         [SerializeField, SpineAnimation] private string _openStartAnimationName;
         [SerializeField, SpineAnimation] private string _openIndleAnimationName;
-        
-        [SerializeField, Min(0f)] private float _openDuration = 0.35f;
-        [SerializeField, Min(0f)] private float _closeDuration = 0.25f;
+        [SerializeField, SpineAnimation] private string _closeAnimationName;
         [SerializeField] private float _openTimeScale = 2f;
         [SerializeField] private float _idleTimeScale = 2f;
+
+        [Header("Timings")]
+        [SerializeField, Min(0f)] private float _openDuration = 0.35f;
         [SerializeField, Min(0f)] private float _valueAnimDuration = 0.6f;
-        [SerializeField] private float _valueAnimStartOffset = -0.3f;
+        [SerializeField, Min(0f)] private float _idleDuration = 1f;
+        [SerializeField, Min(0f)] private float _closeDuration = 0.25f;
 
         [Header("Audio")]
         [SerializeField, WebBridgeSound] private string _cashoutSound;
-        
-        private Coroutine _scaleRoutine;
-        private Coroutine _valueStartRoutine;
-        private Coroutine _valueRoutine;
-        private TrackEntry _openTrackEntry;
-        private Coroutine _fadeRoutine;
+
+        private Coroutine _sequenceRoutine;
         private float _targetValue;
         private string _valuePrefix = "";
         private string _valueSuffix = "$";
@@ -76,31 +74,22 @@ namespace Modules.GamblingTemplates.GamblingTemplates.Runtime.Cashout
             }
         }
 
-        private void SetCanvasAlpha(float value)
+        [Button]
+        public void Show()
         {
-            _canvasGroup.alpha = value;
-            _canvasGroup.interactable = value > 0.001f;
-            _canvasGroup.blocksRaycasts = value > 0.001f;
+            StopSequence();
+            AudioWebBridge.Instance.PlaySound(_cashoutSound);
+            _sequenceRoutine = StartCoroutine(OpenSequence());
         }
         
-        public void Open()
+        private IEnumerator OpenSequence()
         {
-            StopFade();
-            StopValueAnimation();
-            StopValueStartRoutine();
-
             _skeletonAnimation.AnimationState.ClearTracks();
             _skeletonAnimation.gameObject.SetActive(false);
 
-            AudioWebBridge.Instance.PlaySound(_cashoutSound);
+            yield return FadeCanvas(_canvasGroup.alpha, 1f, _openDuration);
 
-            StartFade(1f, _openDuration, onCompleted: PlayOpenAnimation);
-        }
-
-        private void PlayOpenAnimation()
-        {
             _skeletonAnimation.gameObject.SetActive(true);
-
             AnimationState animationState = _skeletonAnimation.AnimationState;
 
             TrackEntry openAnim = animationState.SetAnimation(0, _openStartAnimationName, false);
@@ -111,178 +100,82 @@ namespace Modules.GamblingTemplates.GamblingTemplates.Runtime.Cashout
             idleAnim.MixDuration = 0f;
             idleAnim.TimeScale = _idleTimeScale;
 
-            StartValueAnimationAfterOpen(openAnim);
+            float openRealtime = openAnim.Animation.Duration / Mathf.Max(Mathf.Abs(_openTimeScale), 0.0001f);
+            yield return new WaitForSecondsRealtime(openRealtime);
+
+            if (_canAnimateValue)
+                yield return AnimateValue(_valueAnimDuration);
+
+            yield return new WaitForSecondsRealtime(_idleDuration);
+
+            yield return CloseSequence();
         }
 
-        public void Close()
+        private IEnumerator CloseSequence()
         {
-            if (!gameObject.activeSelf)
-            {
-                transform.localScale = Vector3.zero;
-                SetCanvasAlpha(0f);
-                return;
-            }
-            
-            _canvasGroup.interactable = false;
-            _canvasGroup.blocksRaycasts = false;
-            StartFade(0f, _closeDuration);
-            StopValueAnimation();
-            StopValueStartRoutine();
-            
-            if (_openTrackEntry != null)
-            {
-                _openTrackEntry.Complete -= OnOpenAnimationComplete;
-                _openTrackEntry.End -= OnOpenAnimationEnd;
-                _openTrackEntry = null;
-            }
+            _skeletonAnimation.gameObject.SetActive(true);
+
+            TrackEntry closeAnim = _skeletonAnimation.AnimationState.SetAnimation(0, _closeAnimationName, false);
+            closeAnim.MixDuration = 0f;
+
+            yield return FadeCanvas(_canvasGroup.alpha, 0f, _closeDuration);
+
+            _skeletonAnimation.AnimationState.ClearTracks();
+            _skeletonAnimation.gameObject.SetActive(false);
+            _sequenceRoutine = null;
         }
 
-        private void StartValueAnimationAfterOpen(TrackEntry openAnim)
+        private IEnumerator FadeCanvas(float from, float to, float duration)
         {
-            StopValueAnimation();
-            StopValueStartRoutine();
-
-            if (!_canAnimateValue)
-                return;
-
-            SetValueText(0f);
-
-            if (openAnim.Animation.Duration <= 0f)
-            {
-                StartValueAnimationIfNotStarted();
-                return;
-            }
-
-            if (_openTrackEntry != null)
-            {
-                _openTrackEntry.Complete -= OnOpenAnimationComplete;
-                _openTrackEntry.End -= OnOpenAnimationEnd;
-            }
-
-            _openTrackEntry = openAnim;
-            _openTrackEntry.Complete += OnOpenAnimationComplete;
-            _openTrackEntry.End += OnOpenAnimationEnd;
-
-            float timeScale = Mathf.Abs(openAnim.TimeScale) > 0.0001f ? Mathf.Abs(openAnim.TimeScale) : 1f;
-            float openDurationRealtime = openAnim.Animation.Duration / timeScale;
-            float delay = openDurationRealtime + _valueAnimStartOffset;
-            if (delay <= 0f)
-                StartValueAnimationIfNotStarted();
-            else
-                _valueStartRoutine = StartCoroutine(DelayStartValue(delay));
-        }
-
-        private void OnOpenAnimationComplete(TrackEntry trackEntry)
-        {
-            HandleOpenAnimationFinished(trackEntry);
-        }
-
-        private void OnOpenAnimationEnd(TrackEntry trackEntry)
-        {
-            HandleOpenAnimationFinished(trackEntry);
-        }
-
-        private void HandleOpenAnimationFinished(TrackEntry trackEntry)
-        {
-            trackEntry.Complete -= OnOpenAnimationComplete;
-            trackEntry.End -= OnOpenAnimationEnd;
-            if (_openTrackEntry == trackEntry)
-                _openTrackEntry = null;
-            StartValueAnimationIfNotStarted();
-        }
-
-        private IEnumerator DelayStartValue(float delay)
-        {
-            yield return new WaitForSecondsRealtime(delay);
-            _valueStartRoutine = null;
-            StartValueAnimationIfNotStarted();
-        }
-
-        private void StartValueAnimationIfNotStarted()
-        {
-            if (_valueRoutine != null)
-                return;
-
-            _valueRoutine = StartCoroutine(AnimateValue());
-        }
-
-        private void StopValueAnimation()
-        {
-            if (_valueRoutine == null)
-                return;
-            StopCoroutine(_valueRoutine);
-            _valueRoutine = null;
-        }
-
-        private void StopValueStartRoutine()
-        {
-            if (_valueStartRoutine == null)
-                return;
-            StopCoroutine(_valueStartRoutine);
-            _valueStartRoutine = null;
-        }
-
-        private void StartFade(float toAlpha, float duration, Action onCompleted = null)
-        {
-            StopFade();
-
-            float fromAlpha = _canvasGroup.alpha;
             if (duration <= 0f)
             {
-                SetCanvasAlpha(toAlpha);
-                onCompleted?.Invoke();
-                return;
-            }
-
-            _fadeRoutine = StartCoroutine(FadeRoutine(fromAlpha, toAlpha, duration, onCompleted));
-        }
-
-        private void StopFade()
-        {
-            if (_fadeRoutine == null)
-                return;
-
-            StopCoroutine(_fadeRoutine);
-            _fadeRoutine = null;
-        }
-
-        private IEnumerator FadeRoutine(float fromAlpha, float toAlpha, float duration, Action onCompleted)
-        {
-            float elapsed = 0f;
-            while (elapsed < duration)
-            {
-                float t = Mathf.Clamp01(elapsed / duration);
-                _canvasGroup.alpha = Mathf.LerpUnclamped(fromAlpha, toAlpha, t);
-                elapsed += Time.unscaledDeltaTime;
-                yield return null;
-            }
-
-            _canvasGroup.alpha = toAlpha;
-            _fadeRoutine = null;
-            onCompleted?.Invoke();
-        }
-
-        private IEnumerator AnimateValue()
-        {
-            if (_valueAnimDuration <= 0f)
-            {
-                SetValueText(_targetValue);
-                _valueRoutine = null;
+                SetCanvasAlpha(to);
                 yield break;
             }
 
             float elapsed = 0f;
-            while (elapsed < _valueAnimDuration)
+            while (elapsed < duration)
             {
-                float t = Mathf.Clamp01(elapsed / _valueAnimDuration);
-                float value = Mathf.LerpUnclamped(0f, _targetValue, t);
-                SetValueText(value);
+                SetCanvasAlpha(Mathf.LerpUnclamped(from, to, elapsed / duration));
                 elapsed += Time.unscaledDeltaTime;
                 yield return null;
             }
+            SetCanvasAlpha(to);
+        }
 
+        private IEnumerator AnimateValue(float duration)
+        {
+            if (duration <= 0f)
+            {
+                SetValueText(_targetValue);
+                yield break;
+            }
+
+            SetValueText(0f);
+            float elapsed = 0f;
+            while (elapsed < duration)
+            {
+                SetValueText(Mathf.LerpUnclamped(0f, _targetValue, elapsed / duration));
+                elapsed += Time.unscaledDeltaTime;
+                yield return null;
+            }
             SetValueText(_targetValue);
-            _valueRoutine = null;
+        }
+
+        private void StopSequence()
+        {
+            if (_sequenceRoutine == null)
+                return;
+            StopCoroutine(_sequenceRoutine);
+            _sequenceRoutine = null;
+        }
+
+        private void SetCanvasAlpha(float value)
+        {
+            _canvasGroup.alpha = value;
+            bool visible = value > 0.001f;
+            _canvasGroup.interactable = visible;
+            _canvasGroup.blocksRaycasts = visible;
         }
 
         private void SetValueText(float value)
