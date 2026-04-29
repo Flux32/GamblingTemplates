@@ -54,20 +54,9 @@ namespace Modules.GamblingTemplates.GamblingTemplates.Runtime.Cashout
             _skeletonAnimation.gameObject.SetActive(false);
             _cashoutValue.gameObject.SetActive(false);
         }
-
-        public void SetValue(float amount)
+        
+        private void SetValue(string amount)
         {
-            _targetValue = amount;
-            _valuePrefix = "";
-            _valueSuffix = "$";
-            _valueDecimals = AmountTextUtility.GetDecimalPlaces(amount);
-            _canAnimateValue = true;
-            _cashoutValue.text = AmountTextUtility.FormatAmount(_targetValue, _valuePrefix, _valueSuffix, _valueDecimals);
-        }
-
-        public void SetValue(string amount)
-        {
-            _cashoutValue.text = amount;
             if (AmountTextUtility.TryParseAmount(amount, out float value, out string prefix, out string suffix, out int decimals))
             {
                 _targetValue = value;
@@ -75,17 +64,20 @@ namespace Modules.GamblingTemplates.GamblingTemplates.Runtime.Cashout
                 _valueSuffix = suffix;
                 _valueDecimals = decimals;
                 _canAnimateValue = true;
+                SetValueText(0f);
             }
             else
             {
                 _canAnimateValue = false;
+                _cashoutValue.text = amount;
             }
         }
 
         [Button]
-        public void Show()
+        public void Show(string amount)
         {
             StopSequence();
+            SetValue(amount);
             AudioWebBridge.Instance.PlaySound(_cashoutSound);
             _sequenceRoutine = StartCoroutine(OpenSequence());
         }
