@@ -24,6 +24,9 @@ namespace Modules.GamblingTemplates.GamblingTemplates.Runtime.Cashout
         [SerializeField, SpineAnimation] private string _closeAnimationName;
         [SerializeField] private float _openTimeScale = 2f;
         [SerializeField] private float _idleTimeScale = 2f;
+        [SerializeField, Min(0f)] private float _openMixDuration = 0f;
+        [SerializeField, Min(0f)] private float _idleMixDuration = 0f;
+        [SerializeField, Min(0f)] private float _closeMixDuration = 0f;
 
         [Header("Timings")]
         [SerializeField, Min(0f)] private float _openDuration = 0.35f;
@@ -45,6 +48,7 @@ namespace Modules.GamblingTemplates.GamblingTemplates.Runtime.Cashout
         {
             SetCanvasAlpha(0f);
             _skeletonAnimation.gameObject.SetActive(false);
+            _cashoutValue.gameObject.SetActive(false);
         }
 
         public void SetValue(float amount)
@@ -86,19 +90,23 @@ namespace Modules.GamblingTemplates.GamblingTemplates.Runtime.Cashout
         {
             _skeletonAnimation.AnimationState.ClearTracks();
             _skeletonAnimation.gameObject.SetActive(false);
+            _cashoutValue.gameObject.SetActive(false);
 
             yield return FadeCanvas(_canvasGroup.alpha, 1f, _openDuration);
 
             _skeletonAnimation.gameObject.SetActive(true);
+            _cashoutValue.gameObject.SetActive(true);
             AnimationState animationState = _skeletonAnimation.AnimationState;
 
             TrackEntry openAnim = animationState.SetAnimation(0, _openStartAnimationName, false);
-            openAnim.MixDuration = 0f;
+            openAnim.MixDuration = _openMixDuration;
             openAnim.TimeScale = _openTimeScale;
 
             TrackEntry idleAnim = animationState.AddAnimation(0, _openIndleAnimationName, true, 0);
-            idleAnim.MixDuration = 0f;
+            idleAnim.MixDuration = _idleMixDuration;
             idleAnim.TimeScale = _idleTimeScale;
+
+            ApplySkeletonPoseImmediately();
 
             float openRealtime = openAnim.Animation.Duration / Mathf.Max(Mathf.Abs(_openTimeScale), 0.0001f);
             yield return new WaitForSecondsRealtime(openRealtime);
@@ -114,14 +122,18 @@ namespace Modules.GamblingTemplates.GamblingTemplates.Runtime.Cashout
         private IEnumerator CloseSequence()
         {
             _skeletonAnimation.gameObject.SetActive(true);
+            _cashoutValue.gameObject.SetActive(true);
 
             TrackEntry closeAnim = _skeletonAnimation.AnimationState.SetAnimation(0, _closeAnimationName, false);
-            closeAnim.MixDuration = 0f;
+            closeAnim.MixDuration = _closeMixDuration;
+
+            ApplySkeletonPoseImmediately();
 
             yield return FadeCanvas(_canvasGroup.alpha, 0f, _closeDuration);
 
             _skeletonAnimation.AnimationState.ClearTracks();
             _skeletonAnimation.gameObject.SetActive(false);
+            _cashoutValue.gameObject.SetActive(false);
             _sequenceRoutine = null;
         }
 
@@ -181,6 +193,15 @@ namespace Modules.GamblingTemplates.GamblingTemplates.Runtime.Cashout
         private void SetValueText(float value)
         {
             _cashoutValue.text = AmountTextUtility.FormatAmount(value, _valuePrefix, _valueSuffix, _valueDecimals);
+        }
+
+        private void ApplySkeletonPoseImmediately()
+        {
+            Skeleton skeleton = _skeletonAnimation.Skeleton;
+            skeleton.SetToSetupPose();
+            _skeletonAnimation.AnimationState.Apply(skeleton);
+            skeleton.UpdateWorldTransform();
+            _skeletonAnimation.UpdateMesh();
         }
     }
 
