@@ -1,28 +1,35 @@
+using System;
 using System.Collections;
 using System.Globalization;
 using System.Text.RegularExpressions;
+using Modules.Road;
 using Spine;
 using Spine.Unity;
 using TMPro;
 using UnityEngine;
+using AnimationState = Spine.AnimationState;
 
-namespace Modules.Road.UI
+namespace Modules.GamblingTemplates.GamblingTemplates.Runtime.Cashout
 {
     public class CashOutWindow : MonoBehaviour
     {
+        [Header("Dependencies")]
         [SerializeField] private CanvasGroup _canvasGroup;
-        [SerializeField] private TMP_Text _cashoutValue;
-        [SerializeField, Min(0f)] private float _openDuration = 0.35f;
-        [SerializeField, Min(0f)] private float _closeDuration = 0.25f;
         [SerializeField] private SkeletonGraphic _skeletonAnimation;
+        [SerializeField] private TMP_Text _cashoutValue;
+        
+        [Header("Animations")]
         [SerializeField, SpineAnimation] private string _openStartAnimationName;
         [SerializeField, SpineAnimation] private string _openIndleAnimationName;
+        
+        [SerializeField, Min(0f)] private float _openDuration = 0.35f;
+        [SerializeField, Min(0f)] private float _closeDuration = 0.25f;
         [SerializeField] private float _openTimeScale = 2f;
         [SerializeField] private float _idleTimeScale = 2f;
         [SerializeField, Min(0f)] private float _valueAnimDuration = 0.6f;
-        // Negative values start the counting before the open animation finishes (overlap).
         [SerializeField] private float _valueAnimStartOffset = -0.3f;
 
+        [Header("Audio")]
         [SerializeField, WebBridgeSound] private string _cashoutSound;
         
         private Coroutine _scaleRoutine;
@@ -36,9 +43,10 @@ namespace Modules.Road.UI
         private int _valueDecimals;
         private bool _canAnimateValue;
 
-        private void Start()
+        private void Awake()
         {
             SetCanvasAlpha(0f);
+            _skeletonAnimation.gameObject.SetActive(false);
         }
 
         public void SetValue(float amount)
@@ -78,47 +86,32 @@ namespace Modules.Road.UI
         public void Open()
         {
             StopFade();
-            SetCanvasAlpha(1f);
+            StopValueAnimation();
+            StopValueStartRoutine();
 
-            TrackEntry openAnim = null;
-            if (_skeletonAnimation != null)
-            {
-                openAnim = _skeletonAnimation
-                    .AnimationState
-                    .SetAnimation(0, _openStartAnimationName, false);
+            _skeletonAnimation.AnimationState.ClearTracks();
+            _skeletonAnimation.gameObject.SetActive(false);
 
-                if (openAnim != null)
-                {
-                    openAnim.MixDuration = 0f;
-                    openAnim.TimeScale = _openTimeScale;
-                }
-                
-                TrackEntry idleAnim = _skeletonAnimation
-                    .AnimationState
-                    .AddAnimation(0, _openIndleAnimationName, true, 0);
-
-                if (idleAnim != null)
-                {
-                    idleAnim.MixDuration = 0f;
-                    idleAnim.TimeScale = _idleTimeScale;
-                }
-            }
-            
             AudioWebBridge.Instance.PlaySound(_cashoutSound);
 
+            StartFade(1f, _openDuration, onCompleted: PlayOpenAnimation);
+        }
+
+        private void PlayOpenAnimation()
+        {
+            _skeletonAnimation.gameObject.SetActive(true);
+
+            AnimationState animationState = _skeletonAnimation.AnimationState;
+
+            TrackEntry openAnim = animationState.SetAnimation(0, _openStartAnimationName, false);
+            openAnim.MixDuration = 0f;
+            openAnim.TimeScale = _openTimeScale;
+
+            TrackEntry idleAnim = animationState.AddAnimation(0, _openIndleAnimationName, true, 0);
+            idleAnim.MixDuration = 0f;
+            idleAnim.TimeScale = _idleTimeScale;
+
             StartValueAnimationAfterOpen(openAnim);
-
-            /*
-            bool wasActive = gameObject.activeSelf;
-            gameObject.SetActive(true);
-
-            var from = wasActive ? transform.localScale : Vector3.zero;
-            transform.localScale = from;
-            float fromAlpha = wasActive ? GetCanvasAlpha() : 0f;
-            SetCanvasAlpha(fromAlpha);
-            StartScaleAnimation(from, Vector3.one, fromAlpha, 1f, _openDuration, EasingType.OutBack, false);
-
-            */
         }
 
         public void Close()
@@ -135,105 +128,15 @@ namespace Modules.Road.UI
             StartFade(0f, _closeDuration);
             StopValueAnimation();
             StopValueStartRoutine();
+            
             if (_openTrackEntry != null)
             {
                 _openTrackEntry.Complete -= OnOpenAnimationComplete;
                 _openTrackEntry.End -= OnOpenAnimationEnd;
                 _openTrackEntry = null;
             }
-            /*
-
-            
-            StartScaleAnimation(transform.localScale, Vector3.zero, GetCanvasAlpha(), 0f, _closeDuration, EasingType.InOutBack, true);
-            */
         }
 
-        /*
-        private void StartScaleAnimation(Vector3 from, Vector3 to, float fromAlpha, float toAlpha, float duration, EasingType easingType, bool deactivateOnComplete)
-        {
-            if (_scaleRoutine != null)
-                StopCoroutine(_scaleRoutine);
-
-            _scaleRoutine = StartCoroutine(AnimateScale(from, to, fromAlpha, toAlpha, duration, easingType, deactivateOnComplete));
-        }
-
-        private IEnumerator AnimateScale(Vector3 from, Vector3 to, float fromAlpha, float toAlpha, float duration, EasingType easingType, bool deactivateOnComplete)
-        {
-            if (duration <= 0f)
-            {
-                transform.localScale = to;
-                SetCanvasAlpha(toAlpha);
-                if (deactivateOnComplete)
-                    gameObject.SetActive(false);
-                _scaleRoutine = null;
-                yield break;
-            }
-
-            float elapsed = 0f;
-            while (elapsed < duration)
-            {
-                float t = Mathf.Clamp01(elapsed / duration);
-                float eased = EvaluateEase(t, easingType);
-                transform.localScale = Vector3.LerpUnclamped(from, to, eased);
-                SetCanvasAlpha(Mathf.LerpUnclamped(fromAlpha, toAlpha, eased));
-                elapsed += Time.unscaledDeltaTime;
-                yield return null;
-            }
-
-            transform.localScale = to;
-            SetCanvasAlpha(toAlpha);
-            if (deactivateOnComplete)
-                gameObject.SetActive(false);
-            _scaleRoutine = null;
-        }
-
-        private float EvaluateEase(float t, EasingType easingType)
-        {
-            switch (easingType)
-            {
-                case EasingType.OutBack:
-                    return EaseOutBack(t);
-                case EasingType.InOutBack:
-                    return EaseInOutBack(t);
-                default:
-                    return t;
-            }
-        }
-
-        private static float EaseOutBack(float t)
-        {
-            const float c1 = 1.70158f;
-            const float c3 = c1 + 1f;
-            float p = t - 1f;
-            return 1f + c3 * p * p * p + c1 * p * p;
-        }
-
-        private static float EaseInOutBack(float t)
-        {
-            const float c1 = 1.70158f;
-            const float c2 = c1 * 1.525f;
-
-            if (t < 0.5f)
-            {
-                float p = 2f * t;
-                return (p * p * ((c2 + 1f) * p - c2)) * 0.5f;
-            }
-
-            float q = 2f * t - 2f;
-            return (q * q * ((c2 + 1f) * q + c2) + 2f) * 0.5f;
-        }
-
-        private enum EasingType
-        {
-            OutBack,
-            InOutBack
-        }
-
-        private float GetCanvasAlpha()
-        {
-            return _canvasGroup.alpha;
-        }
-        */
         private void StartValueAnimationAfterOpen(TrackEntry openAnim)
         {
             StopValueAnimation();
@@ -244,7 +147,7 @@ namespace Modules.Road.UI
 
             SetValueText(0f);
 
-            if (openAnim == null || openAnim.Animation == null || openAnim.Animation.Duration <= 0f)
+            if (openAnim.Animation.Duration <= 0f)
             {
                 StartValueAnimationIfNotStarted();
                 return;
@@ -319,7 +222,7 @@ namespace Modules.Road.UI
             _valueStartRoutine = null;
         }
 
-        private void StartFade(float toAlpha, float duration)
+        private void StartFade(float toAlpha, float duration, Action onCompleted = null)
         {
             StopFade();
 
@@ -327,10 +230,11 @@ namespace Modules.Road.UI
             if (duration <= 0f)
             {
                 SetCanvasAlpha(toAlpha);
+                onCompleted?.Invoke();
                 return;
             }
 
-            _fadeRoutine = StartCoroutine(FadeRoutine(fromAlpha, toAlpha, duration));
+            _fadeRoutine = StartCoroutine(FadeRoutine(fromAlpha, toAlpha, duration, onCompleted));
         }
 
         private void StopFade()
@@ -342,7 +246,7 @@ namespace Modules.Road.UI
             _fadeRoutine = null;
         }
 
-        private IEnumerator FadeRoutine(float fromAlpha, float toAlpha, float duration)
+        private IEnumerator FadeRoutine(float fromAlpha, float toAlpha, float duration, Action onCompleted)
         {
             float elapsed = 0f;
             while (elapsed < duration)
@@ -355,6 +259,7 @@ namespace Modules.Road.UI
 
             _canvasGroup.alpha = toAlpha;
             _fadeRoutine = null;
+            onCompleted?.Invoke();
         }
 
         private IEnumerator AnimateValue()
