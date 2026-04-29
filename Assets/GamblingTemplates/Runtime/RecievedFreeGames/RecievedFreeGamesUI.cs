@@ -6,6 +6,7 @@ using Spine;
 using Spine.Unity;
 using TMPro;
 using UnityEngine;
+using AnimationState = Spine.AnimationState;
 
 namespace Modules.GamblingTemplates.GamblingTemplates.Runtime.RecievedFreeGames
 {
@@ -13,41 +14,39 @@ namespace Modules.GamblingTemplates.GamblingTemplates.Runtime.RecievedFreeGames
     {
         [Header("Audio")]
         [SerializeField, WebBridgeSound] private string _bonusPurchaseSound;
-        
+
         [Header("Animations")]
         [SerializeField, SpineAnimation] private string _startAnim;
         [SerializeField, SpineAnimation] private string _idleAnim;
         [SerializeField, SpineAnimation] private string _endAnim;
-        
+
+        [Header("Press Anywhere")]
         [SerializeField, Range(0f, 1f)] private float _fadeOutPressAnywhereMinAlpha = 0.7f;
         [SerializeField, Range(0f, 1f)] private float _pressAnywhereMinScale = 0.9f;
         [SerializeField, Min(0.01f)] private float _pressAnywherePulseHalfDuration = 1f;
-        
+
+        [Header("Canvas Fade")]
         [SerializeField, Min(0f)] private float _canvasFadeInDuration = 0.3f;
         [SerializeField, Min(0f)] private float _canvasFadeInDelay = 0f;
         [SerializeField, Min(0f)] private float _canvasFadeOutDuration = 0.3f;
         [SerializeField, Min(0f)] private float _canvasFadeOutDelay = 0f;
-        
+
+        [Header("Label Fade")]
         [SerializeField, Min(0f)] private float _labelFadeDuration = 0.3f;
-        [SerializeField, Range(0f, 1f)] private float _descentTrigger = 0.5f;
-        [SerializeField, Min(0f)] private float _youHaveWonLabelFadeDelay = 0f;
-        [SerializeField, Min(0f)] private float _freeGamesAmountLabelFadeDelay = 0f;
-        
+        [SerializeField, Min(0f)] private float _labelFadeDelay = 0f;
+
         [Header("Dependencies")]
         [SerializeField] private SkeletonGraphic _skeletonGraphic;
         [SerializeField] private CanvasGroup _canvasGroup;
         [SerializeField] private TMP_Text _freeGamesAmountLabel;
         [SerializeField] private TMP_Text _pressAnywhereToContinueLabel;
-        
+
         public event Action Hidden;
-        
-        private Coroutine _showRoutine;
-        private Coroutine _youHaveWonFadeRoutine;
-        private Coroutine _freeGamesAmountFadeRoutine;
-        private Coroutine _freeGamesFadeRoutine;
-        private Coroutine _canvasFadeRoutine;
+
         private PressAnywhereAnimation _pressAnywhereAnimation;
-        private TrackEntry _startTrackEntry;
+        private Coroutine _showRoutine;
+        private Coroutine _labelFadeRoutine;
+        private Coroutine _canvasFadeRoutine;
         private bool _isWaitingForCloseClick;
         private bool _isClosing;
         private int _currentFreeGamesAmount = 3;
@@ -63,15 +62,86 @@ namespace Modules.GamblingTemplates.GamblingTemplates.Runtime.RecievedFreeGames
         }
 
         [Button]
-        public void TestShow()
+        public void TestShow() => Show(3f, 3);
+
+        public void Show(float duration) => Show(duration, ResolveFreeGamesAmount());
+
+        public void Show(float duration, int freeGamesAmount)
         {
-            Show(3f, 3);
+            CancelRoutines();
+
+            gameObject.SetActive(true);
+            AudioWebBridge.Instance.PlaySound(_bonusPurchaseSound);
+            SetWebUiHidden(true);
+
+            _currentFreeGamesAmount = Mathf.Max(0, freeGamesAmount);
+            _freeGamesAmountLabel.text = _currentFreeGamesAmount.ToString();
+
+            _isClosing = false;
+            _isWaitingForCloseClick = false;
+            _showRoutine = StartCoroutine(ShowRoutine());
         }
-        
-        public void Show(float duration)
+
+        private IEnumerator ShowRoutine()
         {
-            int resolved = ResolveFreeGamesAmount();
-            Show(duration, resolved);
+            SetCanvasAlpha(0f);
+            SetLabelAlpha(_freeGamesAmountLabel, 0f);
+            _pressAnywhereAnimation.PrepareForShow();
+            PlayStartThenIdle();
+            StartCanvasFade(0f, 1f, _canvasFadeInDuration, _canvasFadeInDelay);
+
+            if (_labelFadeDelay > 0f)
+                yield return new WaitForSeconds(_labelFadeDelay);
+
+            StartLabelFade(_freeGamesAmountLabel);
+            _pressAnywhereAnimation.StartPulse();
+            _isWaitingForCloseClick = true;
+            _showRoutine = null;
+        }
+
+        private void Update()
+        {
+            if (!_isWaitingForCloseClick || _isClosing)
+                return;
+            if (_canvasGroup.alpha <= 0.001f)
+                return;
+            if (!Input.GetMouseButtonDown(0))
+                return;
+
+            CloseByClick();
+        }
+
+        private void CloseByClick()
+        {
+            _isClosing = true;
+            _isWaitingForCloseClick = false;
+            _pressAnywhereAnimation.StopPulse();
+            PlayEnd();
+
+            StartCanvasFade(_canvasGroup.alpha, 0f, _canvasFadeOutDuration, _canvasFadeOutDelay, onCompleted: () =>
+            {
+                SetWebUiHidden(false);
+                LayoutWebBridge.Instance.SetHideLogo(false);
+                gameObject.SetActive(false);
+            });
+        }
+
+        private void PlayStartThenIdle()
+        {
+            AnimationState animationState = _skeletonGraphic.AnimationState;
+            animationState.ClearTracks();
+
+            TrackEntry start = animationState.SetAnimation(0, _startAnim, false);
+            start.MixDuration = 0f;
+
+            TrackEntry idle = animationState.AddAnimation(0, _idleAnim, true, 0f);
+            idle.MixDuration = 0f;
+        }
+
+        private void PlayEnd()
+        {
+            TrackEntry end = _skeletonGraphic.AnimationState.SetAnimation(0, _endAnim, false);
+            end.MixDuration = 0f;
         }
 
         private int ResolveFreeGamesAmount()
@@ -80,338 +150,94 @@ namespace Modules.GamblingTemplates.GamblingTemplates.Runtime.RecievedFreeGames
                 return _currentFreeGamesAmount;
 
             int[] bonusPositions = GameWebBridge.Instance.ResolveBonusPositionsForAutoPlay();
-            if (bonusPositions != null && bonusPositions.Length > 0)
-                return bonusPositions.Length;
-
-            return _currentFreeGamesAmount;
+            return bonusPositions != null && bonusPositions.Length > 0
+                ? bonusPositions.Length
+                : _currentFreeGamesAmount;
         }
 
-        public void Show(float duration, int freeGamesAmount)
+        private static void SetWebUiHidden(bool hidden)
         {
-            StopShowRoutine();
-            StopFadeRoutines();
-            
-            if (!gameObject.activeSelf)
-                gameObject.SetActive(true);
-
-            AudioWebBridge.Instance.PlaySound(_bonusPurchaseSound);
-
-            LayoutWebBridge.Instance.SetHideDesktopBetBar(true);
-            LayoutWebBridge.Instance.SetHideMobileBetBar(true);
-            LayoutWebBridge.Instance.SetHideMobileLastWin(true);
-            LayoutWebBridge.Instance.SetHideSettingsMenuButton(true);
-
-            _currentFreeGamesAmount = Mathf.Max(0, freeGamesAmount);
-            ApplyFreeGamesAmountLabel();
-            
-            _ = duration;
-            _isWaitingForCloseClick = false;
-            _isClosing = false;
-            _showRoutine = StartCoroutine(ShowRoutine(duration));
+            LayoutWebBridge layout = LayoutWebBridge.Instance;
+            layout.SetHideDesktopBetBar(hidden);
+            layout.SetHideMobileBetBar(hidden);
+            layout.SetHideMobileLastWin(hidden);
+            layout.SetHideSettingsMenuButton(hidden);
         }
 
-        private void ApplyFreeGamesAmountLabel()
-        {
-            _freeGamesAmountLabel.text = _currentFreeGamesAmount.ToString();
-        }
-
-        private IEnumerator ShowRoutine(float duration)
-        {
-            Debug.Log($"{nameof(RecievedFreeGames)} start show");
-
-            _ = duration;
-            SetCanvasAlpha(0f);
-            SetLabelAlpha(_freeGamesAmountLabel, 0f);
-            _pressAnywhereAnimation?.PrepareForShow();
-            PrepareTotemForShow();
-            StartCanvasFade(0f, 1f, _canvasFadeInDuration, _canvasFadeInDelay);
-
-            if (_youHaveWonLabelFadeDelay > 0f)
-                yield return new WaitForSeconds(_youHaveWonLabelFadeDelay);
-
-            yield return PlayUntilDescent();
-
-            StartLabelFade(_freeGamesAmountLabel, ref _freeGamesAmountFadeRoutine);
-            
-            StartPressAnywherePulse();
-            _isWaitingForCloseClick = true;
-
-            _showRoutine = null;
-            
-            Debug.Log($"{nameof(RecievedFreeGames)} show end");
-        }
-
-        private void Update()
-        {
-            if (!_isWaitingForCloseClick || _isClosing)
-                return;
-
-            if (GetCanvasAlpha() <= 0.001f)
-                return;
-
-            if (!Input.GetMouseButtonDown(0))
-                return;
-
-            CloseByClick();
-        }
-
-        private void PrepareTotemForShow()
-        {
-            _startTrackEntry = null;
-
-            if (_skeletonGraphic == null || _skeletonGraphic.AnimationState == null || string.IsNullOrEmpty(_startAnim))
-                return;
-
-            _skeletonGraphic.AnimationState.ClearTracks();
-
-            TrackEntry entry = _skeletonGraphic.AnimationState.SetAnimation(0, _startAnim, false);
-            
-            Debug.Log($"{nameof(RecievedFreeGames)} show start anim");
-            if (entry == null)
-                return;
-
-            entry.MixDuration = 0f;
-            entry.TrackTime = 0f;
-            entry.TimeScale = 0f;
-            _startTrackEntry = entry;
-        }
-
-        private void StartCanvasFade(float fromAlpha, float toAlpha, float duration, float delay = 0f, Action onCompleted = null)
+        private void StartCanvasFade(float from, float to, float duration, float delay, Action onCompleted = null)
         {
             if (_canvasFadeRoutine != null)
                 StopCoroutine(_canvasFadeRoutine);
-            _canvasFadeRoutine = StartCoroutine(FadeCanvas(fromAlpha, toAlpha, duration, delay, onCompleted));
+            _canvasFadeRoutine = StartCoroutine(FadeCanvas(from, to, duration, delay, onCompleted));
         }
 
-        private IEnumerator FadeCanvas(float fromAlpha, float toAlpha, float duration, float delay,  Action onCompleted = null)
+        private IEnumerator FadeCanvas(float from, float to, float duration, float delay, Action onCompleted)
         {
-            if (_canvasGroup == null)
-            {
-                _canvasFadeRoutine = null;
-                onCompleted?.Invoke();
-                NotifyHiddenIfNeeded(toAlpha);
-                yield break;
-            }
-
             if (delay > 0f)
                 yield return new WaitForSeconds(delay);
-
-            if (duration <= 0f)
-            {
-                SetCanvasAlpha(toAlpha);
-                _canvasFadeRoutine = null;
-                onCompleted?.Invoke();
-                NotifyHiddenIfNeeded(toAlpha);
-                yield break;
-            }
 
             float elapsed = 0f;
             while (elapsed < duration)
             {
-                float t = Mathf.Clamp01(elapsed / duration);
-                SetCanvasAlpha(Mathf.LerpUnclamped(fromAlpha, toAlpha, t));
+                SetCanvasAlpha(Mathf.LerpUnclamped(from, to, elapsed / duration));
                 elapsed += Time.deltaTime;
                 yield return null;
             }
 
-            SetCanvasAlpha(toAlpha);
+            SetCanvasAlpha(to);
             _canvasFadeRoutine = null;
             onCompleted?.Invoke();
-            NotifyHiddenIfNeeded(toAlpha);
-        }
 
-        private void NotifyHiddenIfNeeded(float alpha)
-        {
-            if (alpha <= 0.001f)
+            if (to <= 0.001f)
                 Hidden?.Invoke();
         }
 
-        private void CloseByClick()
+        private void StartLabelFade(TMP_Text label)
         {
-            _isClosing = true;
-            _isWaitingForCloseClick = false;
-            StopPressAnywherePulse();
-            PlayEnd();
-            StartCanvasFade(GetCanvasAlpha(), 0f, _canvasFadeOutDuration, _canvasFadeOutDelay, onCompleted: () =>
-            {
-                LayoutWebBridge.Instance.SetHideDesktopBetBar(false);
-                LayoutWebBridge.Instance.SetHideMobileBetBar(false);
-                LayoutWebBridge.Instance.SetHideMobileLastWin(false);
-                LayoutWebBridge.Instance.SetHideSettingsMenuButton(false);
-                LayoutWebBridge.Instance.SetHideLogo(false);
+            if (_labelFadeRoutine != null)
+                StopCoroutine(_labelFadeRoutine);
+            _labelFadeRoutine = StartCoroutine(FadeLabel(label, 0f, 1f, _labelFadeDuration));
+        }
 
-                if (gameObject.activeSelf)
-                    gameObject.SetActive(false);
-            });
+        private IEnumerator FadeLabel(TMP_Text label, float from, float to, float duration)
+        {
+            float elapsed = 0f;
+            while (elapsed < duration)
+            {
+                SetLabelAlpha(label, Mathf.LerpUnclamped(from, to, elapsed / duration));
+                elapsed += Time.deltaTime;
+                yield return null;
+            }
+
+            SetLabelAlpha(label, to);
+            _labelFadeRoutine = null;
         }
 
         private void SetCanvasAlpha(float alpha)
         {
-            if (_canvasGroup == null)
-                return;
-
             float value = Mathf.Clamp01(alpha);
             _canvasGroup.alpha = value;
-
-            bool isVisible = value > 0.001f;
-            _canvasGroup.interactable = isVisible;
-            _canvasGroup.blocksRaycasts = isVisible;
-        }
-
-        private float GetCanvasAlpha()
-        {
-            return _canvasGroup == null ? 0f : _canvasGroup.alpha;
-        }
-
-        private void StartLabelFade(TMP_Text label, ref Coroutine fadeRoutine)
-        {
-            if (fadeRoutine != null)
-                StopCoroutine(fadeRoutine);
-            fadeRoutine = StartCoroutine(FadeLabel(label, 0f, 1f, _labelFadeDuration));
-        }
-
-        private void StartPressAnywherePulse()
-        {
-            _pressAnywhereAnimation?.StartPulse();
-        }
-
-        private void StopPressAnywherePulse()
-        {
-            _pressAnywhereAnimation?.StopPulse();
-        }
-
-        private IEnumerator FadeLabel(TMP_Text label, float fromAlpha, float toAlpha, float duration)
-        {
-            if (label == null)
-                yield break;
-
-            if (duration <= 0f)
-            {
-                SetLabelAlpha(label, toAlpha);
-                yield break;
-            }
-
-            float elapsed = 0f;
-            while (elapsed < duration)
-            {
-                float t = Mathf.Clamp01(elapsed / duration);
-                SetLabelAlpha(label, Mathf.LerpUnclamped(fromAlpha, toAlpha, t));
-                elapsed += Time.deltaTime;
-                yield return null;
-            }
-
-            SetLabelAlpha(label, toAlpha);
+            bool visible = value > 0.001f;
+            _canvasGroup.interactable = visible;
+            _canvasGroup.blocksRaycasts = visible;
         }
 
         private static void SetLabelAlpha(TMP_Text label, float alpha)
         {
-            if (label == null)
-                return;
-
-            var color = label.color;
+            Color color = label.color;
             color.a = Mathf.Clamp01(alpha);
             label.color = color;
         }
 
-        private void StopShowRoutine()
+        private void CancelRoutines()
         {
-            if (_showRoutine == null)
-                return;
-
-            StopCoroutine(_showRoutine);
+            if (_showRoutine != null) StopCoroutine(_showRoutine);
+            if (_labelFadeRoutine != null) StopCoroutine(_labelFadeRoutine);
+            if (_canvasFadeRoutine != null) StopCoroutine(_canvasFadeRoutine);
             _showRoutine = null;
-        }
-
-        private void StopFadeRoutines()
-        {
-            if (_youHaveWonFadeRoutine != null)
-            {
-                StopCoroutine(_youHaveWonFadeRoutine);
-                _youHaveWonFadeRoutine = null;
-            }
-
-            if (_freeGamesAmountFadeRoutine != null)
-            {
-                StopCoroutine(_freeGamesAmountFadeRoutine);
-                _freeGamesAmountFadeRoutine = null;
-            }
-
-            if (_freeGamesFadeRoutine != null)
-            {
-                StopCoroutine(_freeGamesFadeRoutine);
-                _freeGamesFadeRoutine = null;
-            }
-
-            StopPressAnywherePulse();
-
-            if (_canvasFadeRoutine != null)
-            {
-                StopCoroutine(_canvasFadeRoutine);
-                _canvasFadeRoutine = null;
-            }
-        }
-
-        private IEnumerator PlayUntilDescent()
-        {
-            if (_skeletonGraphic == null || _skeletonGraphic.AnimationState == null || string.IsNullOrEmpty(_startAnim))
-                yield break;
-
-            // Reuse the entry created by PrepareTotemForShow — calling SetAnimation
-            // a second time on the same track interrupts the frozen entry, fires
-            // Start/Interrupt/End events and re-poses the skeleton from frame 0,
-            // which on screen reads as the open animation playing twice (or the
-            // mix-from briefly leaking the previous end pose).
-            TrackEntry startEntry = _startTrackEntry;
-            if (startEntry != null && startEntry.Animation != null && startEntry.Animation.Name == _startAnim)
-            {
-                startEntry.TimeScale = 1f;
-            }
-            else
-            {
-                startEntry = _skeletonGraphic.AnimationState.SetAnimation(0, _startAnim, false);
-                Debug.Log($"{nameof(RecievedFreeGames)} show start anim");
-
-                if (startEntry != null)
-                    startEntry.MixDuration = 0f;
-                _startTrackEntry = startEntry;
-            }
-
-            if (!string.IsNullOrEmpty(_idleAnim))
-            {
-                TrackEntry idleEntry = _skeletonGraphic.AnimationState.AddAnimation(0, _idleAnim, true, 0f);
-                
-                Debug.Log($"{nameof(RecievedFreeGames)} show end anim");
-
-                idleEntry.MixDuration = 0f;
-            }
-
-            if (startEntry == null)
-                yield break;
-
-            float animDuration = startEntry.Animation != null ? startEntry.Animation.Duration : 0f;
-            float triggerTime = animDuration * _descentTrigger;
-            float elapsed = 0f;
-
-            while (elapsed < triggerTime)
-            {
-                elapsed += Time.deltaTime;
-                yield return null;
-            }
-        }
-
-        private void PlayEnd()
-        {
-            Debug.Log($"{nameof(RecievedFreeGames)} stop show");
-
-            _startTrackEntry = null;
-
-            if (_skeletonGraphic == null || _skeletonGraphic.AnimationState == null || string.IsNullOrEmpty(_endAnim))
-                return;
-
-            TrackEntry endEntry = _skeletonGraphic.AnimationState.SetAnimation(0, _endAnim, false);
-            Debug.Log($"{nameof(RecievedFreeGames)} show end anim");
-
-            endEntry.MixDuration = 0;
+            _labelFadeRoutine = null;
+            _canvasFadeRoutine = null;
+            _pressAnywhereAnimation?.StopPulse();
         }
     }
 }
