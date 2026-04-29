@@ -1,28 +1,28 @@
+using System;
+using System.Collections;
 using Attributes.Source.Infrastructure.Inspector;
+using Modules.Road;
 using Spine;
 using Spine.Unity;
-using System.Collections;
-using System;
 using TMPro;
 using UnityEngine;
-using UnityEngine.Serialization;
 
-namespace Modules.Road
+namespace Modules.GamblingTemplates.GamblingTemplates.Runtime.RecievedFreeGames
 {
     public class RecievedFreeGamesUI : MonoBehaviour
     {
-        public event Action Hidden;
-
-        [SerializeField] private SkeletonGraphic _skeletonGraphic;
-
-        [SerializeField] private TMP_Text _freeGamesAmountLabel;
-        [SerializeField] private TMP_Text _pressAnywhereToContinueLabel;
+        [Header("Audio")]
+        [SerializeField, WebBridgeSound] private string _bonusPurchaseSound;
+        
+        [Header("Animations")]
+        [SerializeField, SpineAnimation] private string _startAnim;
+        [SerializeField, SpineAnimation] private string _idleAnim;
+        [SerializeField, SpineAnimation] private string _endAnim;
         
         [SerializeField, Range(0f, 1f)] private float _fadeOutPressAnywhereMinAlpha = 0.7f;
         [SerializeField, Range(0f, 1f)] private float _pressAnywhereMinScale = 0.9f;
         [SerializeField, Min(0.01f)] private float _pressAnywherePulseHalfDuration = 1f;
         
-        [SerializeField] private CanvasGroup _canvasGroup;
         [SerializeField, Min(0f)] private float _canvasFadeInDuration = 0.3f;
         [SerializeField, Min(0f)] private float _canvasFadeInDelay = 0f;
         [SerializeField, Min(0f)] private float _canvasFadeOutDuration = 0.3f;
@@ -33,12 +33,14 @@ namespace Modules.Road
         [SerializeField, Min(0f)] private float _youHaveWonLabelFadeDelay = 0f;
         [SerializeField, Min(0f)] private float _freeGamesAmountLabelFadeDelay = 0f;
         
-        [SerializeField, SpineAnimation] private string _startAnim;
-        [SerializeField, SpineAnimation] private string _idleAnim;
-        [SerializeField, SpineAnimation] private string _endAnim;
-
-        [SerializeField, WebBridgeSound] private string _bonusPurchaseSound;
-
+        [Header("Dependencies")]
+        [SerializeField] private SkeletonGraphic _skeletonGraphic;
+        [SerializeField] private CanvasGroup _canvasGroup;
+        [SerializeField] private TMP_Text _freeGamesAmountLabel;
+        [SerializeField] private TMP_Text _pressAnywhereToContinueLabel;
+        
+        public event Action Hidden;
+        
         private Coroutine _showRoutine;
         private Coroutine _youHaveWonFadeRoutine;
         private Coroutine _freeGamesAmountFadeRoutine;
@@ -48,6 +50,16 @@ namespace Modules.Road
         private bool _isWaitingForCloseClick;
         private bool _isClosing;
         private int _currentFreeGamesAmount = 3;
+
+        private void Awake()
+        {
+            _pressAnywhereAnimation = new PressAnywhereAnimation(
+                this,
+                _pressAnywhereToContinueLabel,
+                _fadeOutPressAnywhereMinAlpha,
+                _pressAnywhereMinScale,
+                _pressAnywherePulseHalfDuration);
+        }
 
         [Button]
         public void TestShow()
@@ -75,6 +87,9 @@ namespace Modules.Road
 
         public void Show(float duration, int freeGamesAmount)
         {
+            StopShowRoutine();
+            StopFadeRoutines();
+            
             if (!gameObject.activeSelf)
                 gameObject.SetActive(true);
 
@@ -89,9 +104,6 @@ namespace Modules.Road
             ApplyFreeGamesAmountLabel();
             
             _ = duration;
-            StopShowRoutine();
-            StopFadeRoutines();
-            EnsurePressAnywhereAnimation();
             _isWaitingForCloseClick = false;
             _isClosing = false;
             _showRoutine = StartCoroutine(ShowRoutine(duration));
@@ -99,14 +111,13 @@ namespace Modules.Road
 
         private void ApplyFreeGamesAmountLabel()
         {
-            if (_freeGamesAmountLabel == null)
-                return;
-
             _freeGamesAmountLabel.text = _currentFreeGamesAmount.ToString();
         }
 
         private IEnumerator ShowRoutine(float duration)
         {
+            Debug.Log($"{nameof(RecievedFreeGames)} start show");
+
             _ = duration;
             SetCanvasAlpha(0f);
             SetLabelAlpha(_freeGamesAmountLabel, 0f);
@@ -117,7 +128,7 @@ namespace Modules.Road
             if (_youHaveWonLabelFadeDelay > 0f)
                 yield return new WaitForSeconds(_youHaveWonLabelFadeDelay);
 
-            yield return PlayTotemUntilDescent();
+            yield return PlayUntilDescent();
 
             StartLabelFade(_freeGamesAmountLabel, ref _freeGamesAmountFadeRoutine);
             
@@ -125,6 +136,8 @@ namespace Modules.Road
             _isWaitingForCloseClick = true;
 
             _showRoutine = null;
+            
+            Debug.Log($"{nameof(RecievedFreeGames)} show end");
         }
 
         private void Update()
@@ -210,7 +223,7 @@ namespace Modules.Road
             _isClosing = true;
             _isWaitingForCloseClick = false;
             StopPressAnywherePulse();
-            PlayTotemEnd();
+            PlayEnd();
             StartCanvasFade(GetCanvasAlpha(), 0f, _canvasFadeOutDuration, _canvasFadeOutDelay, onCompleted: () =>
             {
                 LayoutWebBridge.Instance.SetHideDesktopBetBar(false);
@@ -251,7 +264,6 @@ namespace Modules.Road
 
         private void StartPressAnywherePulse()
         {
-            EnsurePressAnywhereAnimation();
             _pressAnywhereAnimation?.StartPulse();
         }
 
@@ -293,19 +305,6 @@ namespace Modules.Road
             label.color = color;
         }
 
-        private void EnsurePressAnywhereAnimation()
-        {
-            if (_pressAnywhereAnimation != null)
-                return;
-
-            _pressAnywhereAnimation = new PressAnywhereAnimation(
-                this,
-                _pressAnywhereToContinueLabel,
-                _fadeOutPressAnywhereMinAlpha,
-                _pressAnywhereMinScale,
-                _pressAnywherePulseHalfDuration);
-        }
-
         private void StopShowRoutine()
         {
             if (_showRoutine == null)
@@ -344,7 +343,7 @@ namespace Modules.Road
             }
         }
 
-        private IEnumerator PlayTotemUntilDescent()
+        private IEnumerator PlayUntilDescent()
         {
             if (_skeletonGraphic == null || _skeletonGraphic.AnimationState == null || string.IsNullOrEmpty(_startAnim))
                 yield break;
@@ -374,8 +373,10 @@ namespace Modules.Road
             }
         }
 
-        private void PlayTotemEnd()
+        private void PlayEnd()
         {
+            Debug.Log($"{nameof(RecievedFreeGames)} stop show");
+
             if (_skeletonGraphic == null || _skeletonGraphic.AnimationState == null || string.IsNullOrEmpty(_endAnim))
                 return;
 
