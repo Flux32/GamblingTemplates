@@ -47,6 +47,7 @@ namespace Modules.GamblingTemplates.GamblingTemplates.Runtime.RecievedFreeGames
         private Coroutine _freeGamesFadeRoutine;
         private Coroutine _canvasFadeRoutine;
         private PressAnywhereAnimation _pressAnywhereAnimation;
+        private TrackEntry _startTrackEntry;
         private bool _isWaitingForCloseClick;
         private bool _isClosing;
         private int _currentFreeGamesAmount = 3;
@@ -156,8 +157,12 @@ namespace Modules.GamblingTemplates.GamblingTemplates.Runtime.RecievedFreeGames
 
         private void PrepareTotemForShow()
         {
+            _startTrackEntry = null;
+
             if (_skeletonGraphic == null || _skeletonGraphic.AnimationState == null || string.IsNullOrEmpty(_startAnim))
                 return;
+
+            _skeletonGraphic.AnimationState.ClearTracks();
 
             TrackEntry entry = _skeletonGraphic.AnimationState.SetAnimation(0, _startAnim, false);
             if (entry == null)
@@ -166,6 +171,7 @@ namespace Modules.GamblingTemplates.GamblingTemplates.Runtime.RecievedFreeGames
             entry.MixDuration = 0f;
             entry.TrackTime = 0f;
             entry.TimeScale = 0f;
+            _startTrackEntry = entry;
         }
 
         private void StartCanvasFade(float fromAlpha, float toAlpha, float duration, float delay = 0f, Action onCompleted = null)
@@ -348,9 +354,23 @@ namespace Modules.GamblingTemplates.GamblingTemplates.Runtime.RecievedFreeGames
             if (_skeletonGraphic == null || _skeletonGraphic.AnimationState == null || string.IsNullOrEmpty(_startAnim))
                 yield break;
 
-            TrackEntry startEntry = _skeletonGraphic.AnimationState.SetAnimation(0, _startAnim, false);
-            if (startEntry != null)
-                startEntry.MixDuration = 0f;
+            // Reuse the entry created by PrepareTotemForShow — calling SetAnimation
+            // a second time on the same track interrupts the frozen entry, fires
+            // Start/Interrupt/End events and re-poses the skeleton from frame 0,
+            // which on screen reads as the open animation playing twice (or the
+            // mix-from briefly leaking the previous end pose).
+            TrackEntry startEntry = _startTrackEntry;
+            if (startEntry != null && startEntry.Animation != null && startEntry.Animation.Name == _startAnim)
+            {
+                startEntry.TimeScale = 1f;
+            }
+            else
+            {
+                startEntry = _skeletonGraphic.AnimationState.SetAnimation(0, _startAnim, false);
+                if (startEntry != null)
+                    startEntry.MixDuration = 0f;
+                _startTrackEntry = startEntry;
+            }
 
             if (!string.IsNullOrEmpty(_idleAnim))
             {
@@ -376,6 +396,8 @@ namespace Modules.GamblingTemplates.GamblingTemplates.Runtime.RecievedFreeGames
         private void PlayEnd()
         {
             Debug.Log($"{nameof(RecievedFreeGames)} stop show");
+
+            _startTrackEntry = null;
 
             if (_skeletonGraphic == null || _skeletonGraphic.AnimationState == null || string.IsNullOrEmpty(_endAnim))
                 return;
