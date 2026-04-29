@@ -382,8 +382,7 @@ namespace Modules.GamblingTemplates.GamblingTemplates.Runtime.RecievedFreeGames
                 
                 Debug.Log($"{nameof(RecievedFreeGames)} show end anim");
 
-                if (idleEntry != null)
-                    idleEntry.MixDuration = 1f;
+                idleEntry.MixDuration = 0f;
             }
 
             if (startEntry == null)
@@ -412,8 +411,7 @@ namespace Modules.GamblingTemplates.GamblingTemplates.Runtime.RecievedFreeGames
             TrackEntry endEntry = _skeletonGraphic.AnimationState.SetAnimation(0, _endAnim, false);
             Debug.Log($"{nameof(RecievedFreeGames)} show end anim");
 
-            if (endEntry != null)
-                endEntry.MixDuration = 1f;
+            endEntry.MixDuration = 0;
         }
     }
 }
