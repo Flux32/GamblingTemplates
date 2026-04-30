@@ -131,6 +131,8 @@ namespace Modules.GamblingTemplates.GamblingTemplates.Runtime.TransitionScreen
             layout.SetHideMobileBetBar(true);
             layout.SetHideMobileLastWin(true);
             layout.SetHideSettingsMenuButton(true);
+
+            Debug.Log("[TransitionScreen] HideWebUiDuringTransition: bars hidden.");
         }
 
         private void RestoreWebUiAfterTransition()
@@ -144,10 +146,25 @@ namespace Modules.GamblingTemplates.GamblingTemplates.Runtime.TransitionScreen
             if (layout == null)
                 return;
 
-            layout.SetHideDesktopBetBar(false);
-            layout.SetHideMobileBetBar(false);
-            layout.SetHideMobileLastWin(false);
-            layout.SetHideSettingsMenuButton(false);
+            layout.BeginBatch();
+            try
+            {
+                layout.SetHideDesktopBetBar(false);
+                layout.SetHideMobileBetBar(false);
+                layout.SetHideMobileLastWin(false);
+                layout.SetHideSettingsMenuButton(false);
+            }
+            finally
+            {
+                layout.EndBatch();
+            }
+
+            // Force a final sync so the web side always sees the post-transition state,
+            // even if the internal flags were already at false (e.g. due to a stray
+            // SetHide* call between Hide and Restore).
+            layout.SyncUiVisibility();
+
+            Debug.Log("[TransitionScreen] RestoreWebUiAfterTransition: bars set visible.");
         }
 
         private void OnDisable()
