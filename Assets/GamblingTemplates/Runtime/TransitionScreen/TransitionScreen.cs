@@ -20,11 +20,7 @@ namespace Modules.GamblingTemplates.GamblingTemplates.Runtime.TransitionScreen
         private Action _onTransitionCompleted;
         private Action _onNeedChangeScene;
         private bool _isNeedChangeSceneInvoked;
-        private bool _hasCachedUiState;
-        private bool _cachedHideDesktopBetBar;
-        private bool _cachedHideMobileBetBar;
-        private bool _cachedHideMobileLastWin;
-        private bool _cachedHideSettingsMenuButton;
+        private bool _hasHiddenWebUi;
 
         public void Transit()
         {
@@ -129,11 +125,7 @@ namespace Modules.GamblingTemplates.GamblingTemplates.Runtime.TransitionScreen
             if (layout == null)
                 return;
 
-            _cachedHideDesktopBetBar = layout.IsDesktopBetBarHidden;
-            _cachedHideMobileBetBar = layout.IsMobileBetBarHidden;
-            _cachedHideMobileLastWin = layout.IsMobileLastWinHidden;
-            _cachedHideSettingsMenuButton = layout.IsSettingsMenuButtonHidden;
-            _hasCachedUiState = true;
+            _hasHiddenWebUi = true;
 
             layout.SetHideDesktopBetBar(true);
             layout.SetHideMobileBetBar(true);
@@ -143,19 +135,19 @@ namespace Modules.GamblingTemplates.GamblingTemplates.Runtime.TransitionScreen
 
         private void RestoreWebUiAfterTransition()
         {
-            if (!_hasCachedUiState)
+            if (!_hasHiddenWebUi)
                 return;
 
-            LayoutWebBridge layout = LayoutWebBridge.Instance;
-            if (layout != null)
-            {
-                layout.SetHideDesktopBetBar(_cachedHideDesktopBetBar);
-                layout.SetHideMobileBetBar(_cachedHideMobileBetBar);
-                layout.SetHideMobileLastWin(_cachedHideMobileLastWin);
-                layout.SetHideSettingsMenuButton(_cachedHideSettingsMenuButton);
-            }
+            _hasHiddenWebUi = false;
 
-            _hasCachedUiState = false;
+            LayoutWebBridge layout = LayoutWebBridge.Instance;
+            if (layout == null)
+                return;
+
+            layout.SetHideDesktopBetBar(false);
+            layout.SetHideMobileBetBar(false);
+            layout.SetHideMobileLastWin(false);
+            layout.SetHideSettingsMenuButton(false);
         }
 
         private void OnDisable()
