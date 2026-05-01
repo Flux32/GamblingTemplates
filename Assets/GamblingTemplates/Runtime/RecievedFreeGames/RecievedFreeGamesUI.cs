@@ -75,7 +75,6 @@ namespace Modules.GamblingTemplates.GamblingTemplates.Runtime.RecievedFreeGames
 
             gameObject.SetActive(true);
             AudioWebBridge.Instance.PlaySound(_bonusPurchaseSound);
-            SetWebUiHidden(true);
 
             _currentFreeGamesAmount = Mathf.Max(0, freeGamesAmount);
             _freeGamesAmountLabel.text = _currentFreeGamesAmount.ToString();
@@ -123,8 +122,6 @@ namespace Modules.GamblingTemplates.GamblingTemplates.Runtime.RecievedFreeGames
 
             StartCanvasFade(_canvasGroup.alpha, 0f, _canvasFadeOutDuration, _canvasFadeOutDelay, onCompleted: () =>
             {
-                SetWebUiHidden(false);
-                LayoutWebBridge.Instance.SetHideLogo(false);
                 gameObject.SetActive(false);
             });
         }
@@ -156,15 +153,6 @@ namespace Modules.GamblingTemplates.GamblingTemplates.Runtime.RecievedFreeGames
             return bonusPositions != null && bonusPositions.Length > 0
                 ? bonusPositions.Length
                 : _currentFreeGamesAmount;
-        }
-
-        private static void SetWebUiHidden(bool hidden)
-        {
-            LayoutWebBridge layout = LayoutWebBridge.Instance;
-            layout.SetHideDesktopBetBar(hidden);
-            layout.SetHideMobileBetBar(hidden);
-            layout.SetHideMobileLastWin(hidden);
-            layout.SetHideSettingsMenuButton(hidden);
         }
 
         private void StartCanvasFade(float from, float to, float duration, float delay, Action onCompleted = null)
